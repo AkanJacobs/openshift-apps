@@ -1,0 +1,58 @@
+Configure an application with compute resource requests that allow and prevent successful scheduling and scaling of its pods.
+
+Outcomes
+
+
+Observe that memory resource requests allocate cluster node memory.
+
+Explore how adjusting resource requests impacts the number of replicas that can be scheduled on a node.
+
+oc login -u admin -p redhatocp https://api.ocp4.example.com:6443
+
+View the total memory request allocation for the node. 
+$ oc describe node master01
+The command output shows that the pods that are currently running on the node requested a total of 12667 MiB of memory. That value might be slightly different on your system.
+
+Select the reliability-requests project.
+$ oc project reliability-requests
+
+
+oc project reliability-requests
+
+Navigate to the ~/DO180/labs/reliability-requests directory. Create a deployment, service, and route by using the oc apply command and the long-load-deploy.yaml file.
+
+$ cd DO180/labs/reliability-requests
+$ oc apply -f long-load-deploy.yaml
+
+
+Add a resource request to the pod definition and scale the deployment beyond the cluster's capacity.
+
+Modify the long-load-deploy.yaml file by adding a resource request. The request allocates one gibibyte (1 GiB) to each of the application pods.
+
+oc set resources deploy/long-load --requests memory=1gi
+
+
+Scale the deployment to have 10 replicas.
+
+$ oc scale deploy/long-load \
+  --replicas 10
+
+Observe that the cluster cannot schedule all pods on the single node. The pods with a Pending status cannot be scheduled.
+
+$ oc get pods
+
+$ oc get events \
+  --field-selector reason="FailedScheduling"
+$ oc describe \
+  pod/long-load-86bb4b79f8-44zwd
+
+Insufficient Memory
+
+$ oc describe node master01
+Resource           Requests 
+memory             18811Mi (99%)
+
+oc set resources deploy/long-load \
+  --requests memory=250Mi
+
+All good now.
