@@ -1,0 +1,58 @@
+This document explains hwo to use the loadtest.yaml application for load testing. Enjoy !!
+
+
+Create the loadtest deployment, service, and route. The deployment uses the registry.ocp4.example.com:8443/redhattraining/loadtest:v1.0 container image that provides a web application. The web application exposes an API endpoint that creates a CPU-intensive task when queried.
+
+
+
+Review the ~/DO180/labs/reliability-autoscaling/loadtest.yml resource file that the lab command prepared. The container specification does not include the resources section that you use to specify CPU requests and limits. You configure that section in another step. Do not change the file for now.
+
+Use the oc apply command to create the application.
+
+
+Configure a horizontal pod autoscaler resource for the loadtest deployment. Set the minimum number of replicas to 2 and the maximum to 20. Set the average CPU usage to 50% of the CPU requests attribute.
+
+
+
+The horizontal pod autoscaler does not work, because the loadtest deployment does not specify requests for CPU usage.
+
+oc autoscale deployment/loadtest --min 2 --max 20 -cpu-percent 50
+oc get hpa loadtest
+
+So it will not work because no requests are defined i in the deployment YAML. 
+
+Add the requests
+
+	oc scale deploy/loadtest --replicas 0
+	oc set resources deploy/loadtest --requests cpu=20m,memory=250m --limits cpu=100m,memory=1gi
+	oc scale deploy/loadtest --replicas 2
+	oc get hpa will now show range results.
+
+Now it works. Ok next:
+
+Configure a horizontal pod autoscaler resource for the loadtest deployment. Set the minimum number of replicas to 2 and the maximum to 20. Set the average CPU usage to 50% of the CPU request attribute.
+
+oc autoscale deployment/loadtest --min 2 --max 20 --cpu-percent 50
+
+Open a new terminal window and run the watch command to monitor the oc get hpa loadtest command. Wait five minutes for the loadtest horizontal pod autoscaler to report usage in the TARGETS column.
+
+
+
+Notice that the horizontal pod autoscaler scales up the deployment to two replicas, to conform with the minimum number of pods that you configured.
+
+watch oc get hpa loadtest
+
+
+Increase the CPU usage by sending requests to the loadtest application API.
+
+oc get route loadtest
+
+
+
+Send a request to the application API to simulate additional CPU pressure on the container. Do not wait for the curl command to complete, and continue with the exercise. After a minute, the command reports a timeout error that you can ignore.
+
+curl  loadtest-reliability-autoscaling.apps.ocp4.example.com/api/loadtest/v1/cpu/1
+
+Watch the output of the oc get hpa loadtest command in the second terminal. After a minute, the horizontal pod autoscaler detects an increase in the CPU usage and deploys additional pods.
+
+The load grows after this. The pods reach a count of 9 and then scales back down gradually.
