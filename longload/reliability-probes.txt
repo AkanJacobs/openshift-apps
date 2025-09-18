@@ -1,0 +1,99 @@
+Configure health probes in a deployment and verify that network clients are insulated from application failures.
+
+Outcomes
+
+
+Observe potential issues with an application that is not configured with health probes.
+
+Configure startup, liveness, and readiness probes for the application.
+
+
+As the developer user, deploy the long-load application in the reliability-probes project.
+
+Log in as the developer user with the developer password.
+
+[student@workstation ~]$ oc login -u developer -p developer \
+https://api.ocp4.example.com:6443
+
+oc project reliability-probes
+
+
+Apply the long-load-deploy.yaml file to create the pod. Move to the next step within one minute.
+
+oc apply -f \
+  ~/DO180/labs/reliability-probes/long-load-deploy.yaml
+Verify that the pods take several minutes to start by sending a request to a pod in the deployment.
+
+$ oc exec deploy/long-load -- \
+  curl -s localhost:3000/health
+
+oc get pods
+
+
+Add a liveness probe so that broken instances of the application are restarted.
+
+Start the load test script.
+
+$ ~/DO180/labs/reliability-probes/load-test.sh
+
+In a new terminal window, use the /togglesick endpoint to make one of the pods unhealthy. Move to the next step within one minute.
+
+$ oc exec \
+  deploy/long-load -- curl -s localhost:3000/togglesick
+no output expected
+The load test window begins to show app is unhealthy. Because only one pod is unhealthy, the remaining pods still respond with Ok.
+
+
+
+[student@workstation ~]$ oc scale deploy/long-load --replicas 0
+
+
+Update the ~/DO180/labs/reliability-probes/long-load-deploy.yaml file to add a liveness probe. The probe runs every three seconds and triggers the pod as failed after three failed attempts. Modify the spec.template.spec.containers object in the file to match the following excerpt.
+
+oc set probe deploy/long-load --liveness --failure-threshold 3 --periodseconds 3 --get-url http://:3000/health
+
+Scale down the deployment to zero replicas.
+
+
+Wait for the three new pods to reach the ready state. Press Ctrl+c to stop the watch command.
+
+[student@workstation ~]$ watch oc get pods
+
+
+Wait for the load test window to show Ok for all responses, and then toggle one of the pods to be unhealthy.
+
+[student@workstation ~]$ oc exec \
+  deploy/long-load -- curl -s localhost:3000/togglesick
+
+
+
+
+
+Add a readiness probe so that traffic goes only to pods that are ready and healthy.
+
+Scale down the deployment to zero replicas.
+
+[student@workstation ~]$ oc scale deploy/long-load --replicas 0
+
+
+
+Use the oc set probe command to add the readiness probe.
+
+[student@workstation ~]$ oc set probe deploy/long-load \
+  --readiness --failure-threshold 1 --period-seconds 3 \
+  --get-url http://:3000/health
+
+
+
+Scale up the deployment to three replicas.
+
+[student@workstation ~]$ oc scale deploy/long-load --replicas 3
+
+
+oc exec \
+  deploy/long-load -- curl -s localhost:3000/hiccup?time=5
+
+
+The pod status window shows that one of the pods is no longer ready. After five seconds, the pod is healthy again and shows as ready.
+
+The load test window might show app is unhealthy one time before the pod is set as not ready. After the cluster determines that the pod is no longer ready, it stops sending traffic to the pod until either the pod is fixed or the liveness probe fails. Because the pod is sick only for five seconds, it is enough time for the readiness probe to fail, but not the liveness probe.
